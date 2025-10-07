@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import axios from 'axios';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import DashboardAdmin from './pages/DashboardAdmin';
@@ -10,8 +9,7 @@ import Login from './pages/Login';
 import Capture from './pages/Capture';
 import './App.css';
 
-// Gunakan URL dari .env atau fallback ke localhost
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+const API_URL = 'http://localhost:5001';
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -28,7 +26,7 @@ function App() {
     setLoading(false);
   }, []);
 
-  // Fetch data user & absensi kalau sudah login
+  // Fetch users (siswa) data
   useEffect(() => {
     if (currentUser) {
       fetchUsers();
@@ -36,62 +34,94 @@ function App() {
     }
   }, [currentUser]);
 
-  // ✅ Ambil semua user (admin)
   const fetchUsers = async () => {
     try {
-      const res = await axios.get(`${API_URL}/users`);
-      setSiswaData(res.data);
+      const response = await fetch(`${API_URL}/users`);
+      const data = await response.json();
+      setSiswaData(data);
     } catch (error) {
-      console.error('❌ Error fetch users:', error.message);
+      console.error('Error fetching users:', error);
     }
   };
 
-  // ✅ Ambil semua absensi
   const fetchAbsensi = async () => {
     try {
-      const res = await axios.get(`${API_URL}/absensi`);
-      setAbsensiData(res.data);
+      const response = await fetch(`${API_URL}/absensi`);
+      const data = await response.json();
+      setAbsensiData(data);
     } catch (error) {
-      console.error('❌ Error fetch absensi:', error.message);
+      console.error('Error fetching absensi:', error);
     }
   };
 
-  // ✅ Login ke server
+  // Login dengan API
   const login = async (username, password) => {
     try {
-      const res = await axios.post(`${API_URL}/login`, { username, password });
-      const user = res.data.user;
-      setCurrentUser(user);
-      localStorage.setItem('currentUser', JSON.stringify(user));
-      return true;
+      const response = await fetch(`${API_URL}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        setCurrentUser(data.user);
+        localStorage.setItem('currentUser', JSON.stringify(data.user));
+        return true;
+      } else {
+        return false;
+      }
     } catch (error) {
-      console.error('Login error:', error.response?.data || error.message);
-      alert(error.response?.data?.error || 'Login gagal');
+      console.error('Login error:', error);
       return false;
     }
   };
 
-  // ✅ Sign up (daftar user baru)
-  const signUp = async (newUser) => {
-    try {
-      console.log('📤 Mendaftar ke:', `${API_URL}/signup`);
-      const res = await axios.post(`${API_URL}/signup`, {
+  // SignUp dengan API
+const signUp = async (newUser) => {
+  try {
+    console.log('Mengirim request signup ke:', `${API_URL}/signup`);
+    console.log('Data yang dikirim:', {
+      username: newUser.username,
+      password: newUser.password,
+      name: newUser.name,
+      nis: newUser.nis || null,
+      kelas: newUser.kelas || null
+    });
+
+    const response = await fetch(`${API_URL}/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         username: newUser.username,
         password: newUser.password,
         name: newUser.name,
         nis: newUser.nis || null,
-        kelas: newUser.kelas || null,
-      });
+        kelas: newUser.kelas || null
+      })
+    });
+
+    console.log('Response status:', response.status);
+    
+    const data = await response.json();
+    console.log('Response data:', data);
+    
+    if (response.ok) {
       alert('Akun berhasil dibuat!');
       return true;
-    } catch (error) {
-      console.error('SignUp error:', error.response?.data || error.message);
-      alert(error.response?.data?.error || 'Gagal mendaftar');
+    } else {
+      alert('Error: ' + data.error);
       return false;
     }
-  };
+  } catch (error) {
+    console.error('SignUp error:', error);
+    console.error('Error detail:', error.message);
+    alert('Gagal mendaftar. Error: ' + error.message);
+    return false;
+  }
+};
 
-  // ✅ Logout user
   const logout = () => {
     setCurrentUser(null);
     localStorage.removeItem('currentUser');
@@ -99,47 +129,66 @@ function App() {
     setAbsensiData([]);
   };
 
-  // ✅ Tambah siswa baru (oleh admin)
   const addSiswa = async (siswa) => {
     try {
-      await axios.post(`${API_URL}/signup`, {
-        username: siswa.nis,
-        password: 'default123',
-        name: siswa.name,
-        nis: siswa.nis,
-        kelas: siswa.kelas,
+      const response = await fetch(`${API_URL}/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: siswa.nis, // gunakan NIS sebagai username
+          password: 'default123', // password default
+          name: siswa.name,
+          nis: siswa.nis,
+          kelas: siswa.kelas
+        })
       });
-      fetchUsers();
-      return true;
+
+      if (response.ok) {
+        fetchUsers(); // refresh data
+        return true;
+      } else {
+        const data = await response.json();
+        alert(data.error);
+        return false;
+      }
     } catch (error) {
-      console.error('Add siswa error:', error.response?.data || error.message);
-      alert(error.response?.data?.error || 'Gagal menambah siswa');
+      console.error('Add siswa error:', error);
+      alert('Gagal menambah siswa');
       return false;
     }
   };
 
-  // ✅ Tambah absensi (oleh user)
   const addAbsensi = async (absensi) => {
     try {
-      const res = await axios.post(`${API_URL}/absensi`, absensi);
-      alert(res.data.message);
-      fetchAbsensi();
-      return true;
+      const response = await fetch(`${API_URL}/absensi`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(absensi)
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        fetchAbsensi(); // refresh data absensi
+        return true;
+      } else {
+        alert(data.error);
+        return false;
+      }
     } catch (error) {
-      console.error('Add absensi error:', error.response?.data || error.message);
-      alert(error.response?.data?.error || 'Gagal menambah absensi');
+      console.error('Add absensi error:', error);
+      alert('Gagal menambah absensi');
       return false;
     }
   };
 
-  // Saat masih loading
   if (loading) {
     return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh'
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh' 
       }}>
         <h2>Loading...</h2>
       </div>
@@ -149,64 +198,70 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route
-          path="/login"
+        <Route 
+          path="/login" 
           element={
-            <Login
-              onLogin={login}
+            <Login 
+              onLogin={login} 
               currentUser={currentUser}
               onSignUp={signUp}
             />
-          }
+          } 
         />
-
-        <Route
-          path="/"
+        
+        <Route 
+          path="/" 
           element={
             <ProtectedRoute currentUser={currentUser}>
               <Layout currentUser={currentUser} onLogout={logout} />
             </ProtectedRoute>
           }
         >
-          <Route
-            index
+          <Route 
+            index 
             element={
               currentUser?.role === 'admin' ? (
-                <DashboardAdmin
+                <DashboardAdmin 
                   siswaData={siswaData}
                   absensiData={absensiData}
                   onAddSiswa={addSiswa}
                 />
               ) : (
-                <DashboardUser
+                <DashboardUser 
                   currentUser={currentUser}
                   absensiData={absensiData}
                   onAddAbsensi={addAbsensi}
                 />
               )
-            }
+            } 
           />
-
-          <Route
-            path="/rekap"
+          
+          <Route 
+            path="/rekap" 
             element={
-              <Rekap siswaData={siswaData} absensiData={absensiData} />
-            }
-          />
-
-          <Route
-            path="/capture"
-            element={
-              <Capture
-                currentUser={currentUser}
-                onSuccess={() => fetchAbsensi()}
+              <Rekap 
+                siswaData={siswaData}
+                absensiData={absensiData}
               />
-            }
+            } 
+          />
+
+          <Route 
+            path="/capture" 
+            element={
+              <Capture 
+                currentUser={currentUser} 
+                onSuccess={(payload) => {
+                  fetchAbsensi(); // refresh absensi setelah capture
+                }}
+              />
+            } 
           />
         </Route>
       </Routes>
     </Router>
   );
 }
+
 
 export default App;
