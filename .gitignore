@@ -1,0 +1,12 @@
+# Node modules
+node_modules
+
+# Build hasil produksi (tidak perlu dikirim ke GitHub)
+build
+
+# File environment (rahasia)
+.env
+
+# Log
+npm-debug.log
+yarn-error.log
